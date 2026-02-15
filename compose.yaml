@@ -1,0 +1,14 @@
+services:
+  coinflip:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: coinflip
+    ports:
+      - "8080:8080"
+    environment:
+      BETTING_TIME: "10"
+      TIME_TILL_RESULT: "7"
+      NEXT_GAME_DELAY: "3"
+      ONLINE_INTERVAL: "15"
+    restart: unless-stopped

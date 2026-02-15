@@ -1,12 +1,14 @@
 package main
 
 import (
+	"CoinFlip/internal/config"
+	"CoinFlip/internal/game"
 	"encoding/json"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"sync"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
@@ -19,9 +21,10 @@ var gameHash = "stub_hash"
 var gamePhase = "waiting"
 var gameTimer = -1
 
-var bettingTimeSec = 10
-var timeTillResultSec = 5
-var nextGameDelaySec = 2
+var cfg *config.Config
+var engine *game.Engine
+
+var stateMu sync.Mutex
 
 type FirstUpdate struct {
 	Event     string      `json:"event"`
@@ -77,65 +80,65 @@ type NewGame struct {
 	Hash   string `json:"hash"`
 }
 
-const (
-	PhaseWaiting       = "waiting"
-	PhaseBetting       = "betting"
-	PhaseGettingResult = "gettingResult"
-	PhaseFinished      = "finished"
-)
+//const (
+//	PhaseWaiting       = "waiting"
+//	PhaseBetting       = "betting"
+//	PhaseGettingResult = "gettingResult"
+//	PhaseFinished      = "finished"
+//)
 
-func nextPhase() {
-	switch gamePhase {
-
-	case PhaseWaiting:
-		gamePhase = PhaseBetting
-		gameTimer = bettingTimeSec
-		broadcastJSON(GameStarted{
-			Event:       "gameStarted",
-			GameID:      gameID,
-			Hash:        gameHash,
-			BettingTime: bettingTimeSec,
-		})
-
-	case PhaseBetting:
-		gamePhase = PhaseGettingResult
-		gameTimer = timeTillResultSec
-		resultSide := "heads"
-		broadcastJSON(GettingResult{
-			Event:          "gettingResult",
-			GameID:         gameID,
-			Hash:           gameHash,
-			TimeTillResult: timeTillResultSec,
-			ResultSide:     resultSide,
-		})
-
-	case PhaseGettingResult:
-		gamePhase = PhaseFinished
-		gameTimer = nextGameDelaySec
-		broadcastJSON(GameFinished{
-			Event:      "gameFinished",
-			GameID:     gameID,
-			Hash:       gameHash,
-			ResultSide: "heads",
-		})
-
-	case PhaseFinished:
-		gameID++
-		gameHash = "stub_hash"
-		gamePhase = PhaseWaiting
-		if onlineCount > 0 {
-			gameTimer = 3
-		} else {
-			gameTimer = -1
-		}
-
-		broadcastJSON(NewGame{
-			Event:  "newGame",
-			GameID: gameID,
-			Hash:   gameHash,
-		})
-	}
-}
+//func nextPhase() {
+//	switch gamePhase {
+//
+//	case PhaseWaiting:
+//		gamePhase = PhaseBetting
+//		gameTimer = cfg.BettingTime
+//		broadcastJSON(GameStarted{
+//			Event:       "gameStarted",
+//			GameID:      gameID,
+//			Hash:        gameHash,
+//			BettingTime: cfg.BettingTime,
+//		})
+//
+//	case PhaseBetting:
+//		gamePhase = PhaseGettingResult
+//		gameTimer = cfg.TimeTillResult
+//		resultSide := "heads"
+//		broadcastJSON(GettingResult{
+//			Event:          "gettingResult",
+//			GameID:         gameID,
+//			Hash:           gameHash,
+//			TimeTillResult: cfg.TimeTillResult,
+//			ResultSide:     resultSide,
+//		})
+//
+//	case PhaseGettingResult:
+//		gamePhase = PhaseFinished
+//		gameTimer = cfg.NextGameDelay
+//		broadcastJSON(GameFinished{
+//			Event:      "gameFinished",
+//			GameID:     gameID,
+//			Hash:       gameHash,
+//			ResultSide: "heads",
+//		})
+//
+//	case PhaseFinished:
+//		gameID++
+//		gameHash = "stub_hash"
+//		gamePhase = PhaseWaiting
+//		if onlineCount > 0 {
+//			gameTimer = 3
+//		} else {
+//			gameTimer = -1
+//		}
+//
+//		broadcastJSON(NewGame{
+//			Event:  "newGame",
+//			GameID: gameID,
+//			Hash:   gameHash,
+//		})
+//	}
+//}
 
 func broadcastJSON(v any) {
 	for c := range authedConns {
@@ -157,21 +160,30 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer conn.Close()
 	defer func() {
+		stateMu.Lock()
 		if authorized {
 			delete(authedConns, conn)
 			log.Printf("[DISCONNECT] online(before)=%d", onlineCount)
 			onlineCount--
 		}
+		stateMu.Unlock()
 	}()
 
 	log.Println("connected successfully")
 
+	stateMu.Lock()
+	phase := engine.Phase
+	timer := engine.Timer
+	gid := engine.GameID
+	hash := engine.Hash
+	stateMu.Unlock()
+
 	first := FirstUpdate{
 		Event:     "firstUpdate",
-		GamePhase: gamePhase,
-		Timer:     gameTimer,
-		GameID:    gameID,
-		Hash:      gameHash,
+		GamePhase: phase,
+		Timer:     timer,
+		GameID:    gid,
+		Hash:      hash,
 		Bets:      nil,
 	}
 
@@ -184,7 +196,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Println("raw message: ", string(data))
+		log.Println("login info: ", string(data))
 
 		if !authorized {
 			var msg LoginMsg
@@ -205,20 +217,26 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 					websocket.FormatCloseMessage(1008, "auth failed"))
 				return
 			}
-
+			stateMu.Lock()
 			authorized = true
 			authedConns[conn] = true
 			onlineCount++
-			if onlineCount == 1 && gamePhase == PhaseWaiting && gameTimer == -1 {
+			if onlineCount == 1 && engine.Phase == game.PhaseWaiting && engine.Timer == -1 {
 				gameTimer = 3
 			}
 			log.Printf("[LOGIN] online=%d phase=%s timer=%d game=%d", onlineCount, gamePhase, gameTimer, gameID)
 
+			gid := engine.GameID
+			hash := engine.Hash
+			online := onlineCount
+
+			stateMu.Unlock()
+
 			resp := Authorized{
 				Event:  "authorized",
-				GameID: gameID,
-				Hash:   gameHash,
-				Online: onlineCount,
+				GameID: gid,
+				Hash:   hash,
+				Online: online,
 			}
 
 			if err := conn.WriteJSON(resp); err != nil {
@@ -236,28 +254,48 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	gamePhase = PhaseWaiting
-	gameTimer = -1
+	cfg = config.Load()
+	engine = game.NewEngine(cfg)
+
 	http.HandleFunc("/ws", wsHandler)
 	log.Println("Listening on :8080")
 
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
+		prevPhase := ""
+		prevTimer := 999999
+		prevOnline := -1
 
 		for range ticker.C {
+			stateMu.Lock()
+
 			if onlineCount == 0 {
+				stateMu.Unlock()
 				continue
 			}
 
-			if gameTimer > 0 {
-				gameTimer--
+			if engine.Phase == game.PhaseWaiting && engine.Timer == -1 {
+				engine.Timer = 3
 			}
-			log.Printf("[TICK] online=%d phase=%s timer=%d game=%d", onlineCount, gamePhase, gameTimer, gameID)
 
-			if gameTimer == 0 {
-				nextPhase()
+			if engine.Timer > 0 {
+				engine.Timer--
 			}
+
+			if engine.Timer == 0 {
+				engine.NextPhase()
+			}
+
+			log.Printf("[TICK] online=%d phase=%s timer=%d game=%d", onlineCount, engine.Phase, engine.Timer, engine.GameID)
+
+			if engine.Phase != prevPhase || engine.Timer != prevTimer || onlineCount != prevOnline {
+				log.Printf("[STATE] online=%d phase=%s timer=%d game=%d", onlineCount, engine.Phase, engine.Timer, engine.GameID)
+				prevPhase = engine.Phase
+				prevTimer = engine.Timer
+				prevOnline = onlineCount
+			}
+			stateMu.Unlock()
 		}
 	}()
 

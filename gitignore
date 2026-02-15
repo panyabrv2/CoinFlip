@@ -1,0 +1,17 @@
+# binaries / build
+bin/
+dist/
+*.exe
+*.out
+
+# env
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
