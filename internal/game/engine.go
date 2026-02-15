@@ -18,6 +18,12 @@ type Engine struct {
 	cfg *config.Config
 }
 
+func (e *Engine) Snapshot() (phase string, timer int, gameID int, hash string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Phase, e.Timer, e.GameID, e.Hash
+}
+
 const (
 	PhaseWaiting       = "waiting"
 	PhaseBetting       = "betting"

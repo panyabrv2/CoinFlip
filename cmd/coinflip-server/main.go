@@ -16,11 +16,6 @@ var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { retu
 var onlineCount = 0
 var authedConns = make(map[*websocket.Conn]bool)
 
-var gameID = 1
-var gameHash = "stub_hash"
-var gamePhase = "waiting"
-var gameTimer = -1
-
 var cfg *config.Config
 var engine *game.Engine
 
@@ -80,65 +75,18 @@ type NewGame struct {
 	Hash   string `json:"hash"`
 }
 
-//const (
-//	PhaseWaiting       = "waiting"
-//	PhaseBetting       = "betting"
-//	PhaseGettingResult = "gettingResult"
-//	PhaseFinished      = "finished"
-//)
+type GameSnapshot struct {
+	Phase  string `json:"phase"`
+	Timer  int    `json:"timer"`
+	GameID int    `json:"gameId"`
+	Hash   string `json:"hash"`
+	Online int    `json:"online"`
+}
 
-//func nextPhase() {
-//	switch gamePhase {
-//
-//	case PhaseWaiting:
-//		gamePhase = PhaseBetting
-//		gameTimer = cfg.BettingTime
-//		broadcastJSON(GameStarted{
-//			Event:       "gameStarted",
-//			GameID:      gameID,
-//			Hash:        gameHash,
-//			BettingTime: cfg.BettingTime,
-//		})
-//
-//	case PhaseBetting:
-//		gamePhase = PhaseGettingResult
-//		gameTimer = cfg.TimeTillResult
-//		resultSide := "heads"
-//		broadcastJSON(GettingResult{
-//			Event:          "gettingResult",
-//			GameID:         gameID,
-//			Hash:           gameHash,
-//			TimeTillResult: cfg.TimeTillResult,
-//			ResultSide:     resultSide,
-//		})
-//
-//	case PhaseGettingResult:
-//		gamePhase = PhaseFinished
-//		gameTimer = cfg.NextGameDelay
-//		broadcastJSON(GameFinished{
-//			Event:      "gameFinished",
-//			GameID:     gameID,
-//			Hash:       gameHash,
-//			ResultSide: "heads",
-//		})
-//
-//	case PhaseFinished:
-//		gameID++
-//		gameHash = "stub_hash"
-//		gamePhase = PhaseWaiting
-//		if onlineCount > 0 {
-//			gameTimer = 3
-//		} else {
-//			gameTimer = -1
-//		}
-//
-//		broadcastJSON(NewGame{
-//			Event:  "newGame",
-//			GameID: gameID,
-//			Hash:   gameHash,
-//		})
-//	}
-//}
+func makeSnapshot(e *game.Engine, online int) GameSnapshot {
+	phase, timer, gameID, hash := e.Snapshot()
+	return GameSnapshot{Phase: phase, Timer: timer, GameID: gameID, Hash: hash, Online: online}
+}
 
 func broadcastJSON(v any) {
 	for c := range authedConns {
@@ -222,9 +170,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			authedConns[conn] = true
 			onlineCount++
 			if onlineCount == 1 && engine.Phase == game.PhaseWaiting && engine.Timer == -1 {
-				gameTimer = 3
+				engine.Timer = 3
 			}
-			log.Printf("[LOGIN] online=%d phase=%s timer=%d game=%d", onlineCount, gamePhase, gameTimer, gameID)
+			log.Printf("[LOGIN] online=%d phase=%s timer=%d game=%d", onlineCount, engine.Phase, engine.Timer, engine.GameID)
 
 			gid := engine.GameID
 			hash := engine.Hash
