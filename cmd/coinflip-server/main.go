@@ -72,10 +72,6 @@ func main() {
 				continue
 			}
 
-			if engine.Phase == game.PhaseWaiting && engine.Timer == -1 {
-				engine.Timer = 3
-			}
-
 			oldPhase := engine.Phase
 
 			if engine.Timer > 0 {

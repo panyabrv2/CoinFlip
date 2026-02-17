@@ -1,11 +1,11 @@
 package ws
 
 import (
+	"CoinFlip/internal/game"
 	"encoding/json"
 	"log"
 	"net/http"
-
-	"CoinFlip/internal/game"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,83 +17,114 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic in ws handler: %v", r)
+		}
+	}()
 
 	conn, err := h.Upgrader.Upgrade(w, r, nil)
-
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	defer func() { _ = conn.Close() }()
 
-	authorized := false
-
-	defer conn.Close()
-	defer func() {
-		if authorized {
-			h.Hub.RemoveConn(conn)
-			log.Printf("[DISCONNECT] online(before)=%d", h.Hub.Online())
-		}
-	}()
+	h.Hub.Register(conn)
+	defer h.Hub.Unregister(conn)
 
 	log.Println("connected successfully")
 
-	first := FirstUpdate{
+	phase, timer, gameID, hash := h.Engine.Snapshot()
+	_ = h.Hub.SendJSON(conn, FirstUpdate{
 		Event:     "firstUpdate",
-		GamePhase: h.Engine.Phase,
-		Timer:     h.Engine.Timer,
-		GameID:    h.Engine.GameID,
-		Hash:      h.Engine.Hash,
+		GamePhase: phase,
+		Timer:     timer,
+		GameID:    gameID,
+		Hash:      hash,
 		Bets:      nil,
+	})
+
+	var login LoginMsg
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
+	if err := conn.ReadJSON(&login); err != nil {
+		log.Printf("login read error: %v", err)
+		return
 	}
 
-	_ = conn.WriteJSON(first)
+	_ = conn.SetReadDeadline(time.Time{})
+
+	if login.ClientEvent != "login" || login.Token == "" {
+		_ = conn.WriteMessage(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(1008, "login required"),
+		)
+		return
+	}
+
+	h.Hub.MarkAuthed(conn)
+
+	phase, timer, gameID, hash = h.Engine.Snapshot()
+	_, _ = phase, timer
+	_ = h.Hub.SendJSON(conn, Authorized{
+		Event:  "authorized",
+		GameID: gameID,
+		Hash:   hash,
+		Online: h.Hub.Online(),
+	})
 
 	for {
-		_, data, err := conn.ReadMessage()
+		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			log.Println(err)
 			return
 		}
 
-		log.Println("login info: ", string(data))
-
-		if !authorized {
-			var msg LoginMsg
-			if err := json.Unmarshal(data, &msg); err != nil {
-				_ = conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(1008, "bad json"))
-				return
-			}
-
-			if msg.ClientEvent != "login" {
-				_ = conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(1008, "login required"))
-				return
-			}
-
-			if msg.Token == "" {
-				_ = conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(1008, "auth failed"))
-				return
-			}
-			authorized = true
-			h.Hub.AddConn(conn)
-
-			resp := Authorized{
-				Event:  "authorized",
-				GameID: h.Engine.GameID,
-				Hash:   h.Engine.Hash,
-				Online: h.Hub.Online(),
-			}
-
-			if err := conn.WriteJSON(resp); err != nil {
-				log.Println("write authorized error:", err)
-				return
-			}
-
-			log.Println("message after auth:", string(data))
-
+		var base struct {
+			ClientEvent string `json:"client_event"`
+		}
+		if err := json.Unmarshal(raw, &base); err != nil {
 			continue
+		}
+
+		switch base.ClientEvent {
+		case "bet":
+			var bet BetMsg
+			if err := json.Unmarshal(raw, &bet); err != nil {
+				continue
+			}
+
+			if bet.UserID == 0 || (bet.Side != "heads" && bet.Side != "tails") || len(bet.BetItems) == 0 {
+				continue
+			}
+
+			items := make([]game.ItemRef, 0, len(bet.BetItems))
+			for _, it := range bet.BetItems {
+				items = append(items, game.ItemRef{Type: it.Type, ItemID: it.ItemID})
+			}
+
+			accepted, ok := h.Engine.AddBet(bet.UserID, bet.Side, items)
+			if !ok {
+				continue
+			}
+
+			_ = h.Engine.TryStartFromWaiting()
+			phase, timer, gameID, hash := h.Engine.Snapshot()
+			_, _ = phase, timer
+
+			_ = h.Hub.SendJSON(conn, BetsAccepted{
+				Event:    "bets_accepted",
+				GameID:   gameID,
+				Hash:     hash,
+				Accepted: accepted,
+			})
+
+			h.Hub.BroadcastJSON(NewBets{
+				Event:  "new_bets",
+				GameID: gameID,
+				Hash:   hash,
+				Bets:   h.Engine.BetsSnapshot(),
+			})
+		default:
 		}
 	}
 }

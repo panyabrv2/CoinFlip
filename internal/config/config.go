@@ -14,10 +14,10 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		BettingTime:    getEnvInt("BETTING_TIME", 10),
-		TimeTillResult: getEnvInt("TIME_TILL_RESULT", 5),
-		NextGameDelay:  getEnvInt("NEXT_GAME_DELAY", 2),
-		OnlineInterval: getEnvInt("ONLINE_INTERVAL", 5),
+		BettingTime:    getEnvInt("BETTING_TIME", 3),
+		TimeTillResult: getEnvInt("TIME_TILL_RESULT", 3),
+		NextGameDelay:  getEnvInt("NEXT_GAME_DELAY", 3),
+		OnlineInterval: getEnvInt("ONLINE_INTERVAL", 3),
 	}
 }
 
