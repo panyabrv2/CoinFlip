@@ -2,6 +2,9 @@ package game
 
 import (
 	"CoinFlip/internal/config"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/hex"
 	"log"
 )
 
@@ -11,9 +14,10 @@ type Engine struct {
 	GameID     int
 	Hash       string
 	ResultSide string
-	bets       *BetStore
+	Seed       string
 
-	cfg *config.Config
+	bets *BetStore
+	cfg  *config.Config
 }
 
 func (e *Engine) Snapshot() (phase string, timer int, gameID int, hash string) {
@@ -28,13 +32,20 @@ const (
 )
 
 func NewEngine(cfg *config.Config) *Engine {
+	seedBytes := newSeedBytes()
+	seedHex := hex.EncodeToString(seedBytes)
+	hash := sha1Hex(seedBytes)
+
 	return &Engine{
 		Phase:  PhaseWaiting,
 		Timer:  -1,
 		GameID: 1,
-		Hash:   "stub_hash",
-		cfg:    cfg,
-		bets:   NewBetStore(),
+
+		Seed: seedHex,
+		Hash: hash,
+
+		cfg:  cfg,
+		bets: NewBetStore(),
 	}
 }
 
@@ -53,12 +64,14 @@ func (e *Engine) NextPhase() {
 	case PhaseBetting:
 		e.Phase = PhaseGettingResult
 		e.Timer = e.cfg.TimeTillResult
+
+		e.ResultSide = sideFromSeedHex(e.Seed)
+
 		log.Println("gettingResult")
 
 	case PhaseGettingResult:
 		e.Phase = PhaseFinished
 		e.Timer = e.cfg.NextGameDelay
-		e.ResultSide = "heads"
 		log.Println("gameFinished")
 
 	case PhaseFinished:
@@ -67,6 +80,12 @@ func (e *Engine) NextPhase() {
 		e.GameID++
 		e.Phase = PhaseWaiting
 		e.Timer = -1
+		e.ResultSide = ""
+
+		seedBytes := newSeedBytes()
+		e.Seed = hex.EncodeToString(seedBytes)
+		e.Hash = sha1Hex(seedBytes)
+
 		log.Println("newGame")
 	}
 }
@@ -79,6 +98,17 @@ func (e *Engine) AddBet(userID int64, side string, items []ItemRef) (accepted in
 		return 0, false
 	}
 	if len(items) == 0 {
+		return 0, false
+	}
+
+	switch e.Phase {
+	case PhaseWaiting:
+		// ok
+	case PhaseBetting:
+		if e.Timer <= 0 {
+			return 0, false
+		}
+	default:
 		return 0, false
 	}
 
@@ -105,4 +135,28 @@ func (e *Engine) TryStartFromWaiting() bool {
 	e.Timer = e.cfg.BettingTime
 	log.Println("gameStarted")
 	return true
+}
+
+func newSeedBytes() []byte {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return []byte("fallback-seed-fallback-seed-123456")
+	}
+	return b
+}
+
+func sha1Hex(b []byte) string {
+	sum := sha1.Sum(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func sideFromSeedHex(seedHex string) string {
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil || len(seed) == 0 {
+		return "heads"
+	}
+	if seed[0]%2 == 0 {
+		return "heads"
+	}
+	return "tails"
 }

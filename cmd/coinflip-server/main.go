@@ -27,7 +27,7 @@ func eventForPhase(e *game.Engine) any {
 			GameID:         e.GameID,
 			Hash:           e.Hash,
 			TimeTillResult: e.Timer,
-			ResultSide:     "stub",
+			ResultSide:     e.ResultSide,
 		}
 
 	case game.PhaseFinished:
@@ -35,7 +35,8 @@ func eventForPhase(e *game.Engine) any {
 			Event:      "gameFinished",
 			GameID:     e.GameID,
 			Hash:       e.Hash,
-			ResultSide: "stub",
+			ResultSide: e.ResultSide,
+			Seed:       e.Seed, // reveal
 		}
 
 	case game.PhaseWaiting:
@@ -67,6 +68,8 @@ func main() {
 		onlineTick := 0
 
 		for range ticker.C {
+			onlineTick++
+
 			online := hub.Online()
 			if online == 0 {
 				continue
@@ -86,7 +89,6 @@ func main() {
 				evt = eventForPhase(engine)
 			}
 
-			onlineTick++
 			var onlineEvt any
 			if cfg.OnlineInterval > 0 && onlineTick%cfg.OnlineInterval == 0 {
 				onlineEvt = ws.OnlineMsg{Event: "online", Online: online}
@@ -104,5 +106,4 @@ func main() {
 	log.Println("SERVER STARTED")
 	err := http.ListenAndServe(":8080", nil)
 	log.Printf("ListenAndServe returned: %v", err)
-
 }

@@ -46,6 +46,7 @@ type GameFinished struct {
 	GameID     int    `json:"game_id"`
 	Hash       string `json:"hash"`
 	ResultSide string `json:"result_side"`
+	Seed       string `json:"seed"` // reveal
 }
 
 type NewGame struct {
@@ -53,6 +54,7 @@ type NewGame struct {
 	GameID int    `json:"game_id"`
 	Hash   string `json:"hash"`
 }
+
 type BetMsg struct {
 	ClientEvent string    `json:"client_event"` // "bet"
 	UserID      int64     `json:"user_id"`

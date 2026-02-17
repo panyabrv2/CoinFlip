@@ -42,18 +42,63 @@ func (s *BetStore) Add(gameID int, userID int64, side string, items []ItemRef) i
 func (s *BetStore) UniqueUsers(gameID int) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	return len(s.bets[gameID])
+}
+
+type betsSnapshot struct {
+	TotalBets  int        `json:"total_bets"`
+	TotalValue int        `json:"total_value"`
+	Heads      sideBucket `json:"heads"`
+	Tails      sideBucket `json:"tails"`
+}
+
+type sideBucket struct {
+	TotalBets  int        `json:"total_bets"`
+	TotalValue int        `json:"total_value"`
+	Users      []userSlot `json:"users"`
+}
+
+type userSlot struct {
+	UserID     int64     `json:"user_id"`
+	TotalValue int       `json:"total_value"`
+	Items      []ItemRef `json:"items"`
 }
 
 func (s *BetStore) Snapshot(gameID int) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	out := make([]UserBet, 0, len(s.bets[gameID]))
+	var out betsSnapshot
+
 	for _, b := range s.bets[gameID] {
-		out = append(out, b)
+		slot := userSlot{
+			UserID:     b.UserID,
+			TotalValue: 0,
+			Items:      b.Items,
+		}
+
+		out.TotalBets++
+
+		if b.Side == "heads" {
+			out.Heads.TotalBets++
+			out.Heads.Users = append(out.Heads.Users, slot)
+		} else if b.Side == "tails" {
+			out.Tails.TotalBets++
+			out.Tails.Users = append(out.Tails.Users, slot)
+		}
 	}
+
+	out.TotalValue = 0
+	out.Heads.TotalValue = 0
+	out.Tails.TotalValue = 0
+
+	if out.Heads.Users == nil {
+		out.Heads.Users = []userSlot{}
+	}
+	if out.Tails.Users == nil {
+		out.Tails.Users = []userSlot{}
+	}
+
 	return out
 }
 

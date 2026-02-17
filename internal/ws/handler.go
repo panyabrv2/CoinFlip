@@ -42,7 +42,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Timer:     timer,
 		GameID:    gameID,
 		Hash:      hash,
-		Bets:      nil,
+		Bets:      h.Engine.BetsSnapshot(),
 	})
 
 	var login LoginMsg
