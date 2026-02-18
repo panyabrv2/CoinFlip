@@ -11,45 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func eventForPhase(e *game.Engine) any {
-	switch e.Phase {
-	case game.PhaseBetting:
-		return ws.GameStarted{
-			Event:       "gameStarted",
-			GameID:      e.GameID,
-			Hash:        e.Hash,
-			BettingTime: e.Timer,
-		}
-
-	case game.PhaseGettingResult:
-		return ws.GettingResult{
-			Event:          "gettingResult",
-			GameID:         e.GameID,
-			Hash:           e.Hash,
-			TimeTillResult: e.Timer,
-			ResultSide:     e.ResultSide,
-		}
-
-	case game.PhaseFinished:
-		return ws.GameFinished{
-			Event:      "gameFinished",
-			GameID:     e.GameID,
-			Hash:       e.Hash,
-			ResultSide: e.ResultSide,
-			Seed:       e.Seed, // reveal
-		}
-
-	case game.PhaseWaiting:
-		return ws.NewGame{
-			Event:  "newGame",
-			GameID: e.GameID,
-			Hash:   e.Hash,
-		}
-	default:
-		return nil
-	}
-}
-
 func main() {
 	cfg := config.Load()
 	engine := game.NewEngine(cfg)
@@ -67,7 +28,7 @@ func main() {
 
 		onlineTick := 0
 
-		for range ticker.C {
+		for t := range ticker.C {
 			onlineTick++
 
 			online := hub.Online()
@@ -75,30 +36,21 @@ func main() {
 				continue
 			}
 
-			oldPhase := engine.Phase
+			phaseChanged, snap := engine.Tick()
 
-			if engine.Timer > 0 {
-				engine.Timer--
-			}
-			if engine.Timer == 0 {
-				engine.NextPhase()
-			}
-
-			var evt any
-			if engine.Phase != oldPhase {
-				evt = eventForPhase(engine)
+			if phaseChanged {
+				evt := ws.EventForPhase(snap, t.UTC())
+				if evt != nil {
+					hub.BroadcastJSON(evt)
+				}
 			}
 
-			var onlineEvt any
 			if cfg.OnlineInterval > 0 && onlineTick%cfg.OnlineInterval == 0 {
-				onlineEvt = ws.OnlineMsg{Event: "online", Online: online}
-			}
-
-			if evt != nil {
-				hub.BroadcastJSON(evt)
-			}
-			if onlineEvt != nil {
-				hub.BroadcastJSON(onlineEvt)
+				hub.BroadcastJSON(ws.OnlineMsg{
+					Event:      ws.EventOnline,
+					Online:     online,
+					ServerTime: t.UTC().Format(time.RFC3339),
+				})
 			}
 		}
 	}()
