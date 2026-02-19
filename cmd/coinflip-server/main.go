@@ -53,15 +53,18 @@ func main() {
 					if snap.Phase == game.PhaseFinished {
 						if pr, ok := engine.PayoutForGame(snap.GameID); ok {
 							hub.BroadcastJSON(ws.GamePayout{
-								Event:        ws.EventGamePayout,
-								GameID:       pr.GameID,
-								Hash:         pr.Hash,
-								ResultSide:   string(pr.ResultSide),
-								TotalBank:    pr.TotalBank,
-								TotalWinning: pr.TotalWinning,
-								HasWinners:   pr.HasWinners,
-								Winners:      pr.Winners,
-								ServerTime:   t.UTC().Format("2006-01-02 15:04:05.000000-07"),
+								Event:            ws.EventGamePayout,
+								GameID:           pr.GameID,
+								Hash:             pr.Hash,
+								ResultSide:       string(pr.ResultSide),
+								TotalBank:        pr.TotalBank,
+								TotalWinning:     pr.TotalWinning,
+								HouseCut:         pr.HouseCut,
+								Distributate:     pr.Distributable,
+								HasWinners:       pr.HasWinners,
+								Winners:          pr.Winners,
+								HouseProfitTotal: pr.HouseProfitTotal,
+								ServerTime:       t.UTC().Format("2006-01-02 15:04:05.000000-07"),
 							})
 						}
 					}

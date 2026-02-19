@@ -98,15 +98,18 @@ type NewBets struct {
 }
 
 type GamePayout struct {
-	Event        Event                       `json:"event"`
-	GameID       int                         `json:"game_id"`
-	Hash         string                      `json:"hash"`
-	ResultSide   string                      `json:"result_side"`
-	TotalBank    float64                     `json:"total_bank"`
-	TotalWinning float64                     `json:"total_winning"`
-	HasWinners   bool                        `json:"has_winners"`
-	Winners      map[int64]game.WinnerPayout `json:"winners"`
-	ServerTime   string                      `json:"server_time"`
+	Event            Event                       `json:"event"`
+	GameID           int                         `json:"game_id"`
+	Hash             string                      `json:"hash"`
+	ResultSide       string                      `json:"result_side"`
+	TotalBank        float64                     `json:"total_bank"`
+	TotalWinning     float64                     `json:"total_winning"`
+	Distributate     float64                     `json:"distributate"`
+	HouseCut         float64                     `json:"house_cut"`
+	HasWinners       bool                        `json:"has_winners"`
+	Winners          map[int64]game.WinnerPayout `json:"winners"`
+	HouseProfitTotal float64                     `json:"house_profit_total"`
+	ServerTime       string                      `json:"server_time"`
 }
 
 type ErrorMsg struct {

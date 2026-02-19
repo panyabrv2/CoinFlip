@@ -29,22 +29,28 @@ func (e *Engine) calculatePayoutsLocked() PayoutResult {
 		}
 	}
 
+	houseCut := totalBank * e.cfg.HouseEdge
+	distributable := totalBank - houseCut
+
 	out := PayoutResult{
-		GameID:       gid,
-		Hash:         e.hash,
-		ResultSide:   result,
-		TotalBank:    totalBank,
-		TotalWinning: totalWinning,
-		HasWinners:   totalWinning > 0,
-		Winners:      make(map[int64]WinnerPayout),
+		GameID:           gid,
+		Hash:             e.hash,
+		ResultSide:       result,
+		TotalBank:        totalBank,
+		TotalWinning:     totalWinning,
+		Distributable:    distributable,
+		HouseCut:         houseCut,
+		HasWinners:       totalWinning > 0,
+		Winners:          make(map[int64]WinnerPayout),
+		HouseProfitTotal: 0,
 	}
+
+	e.houseProfitTotal += houseCut
+	out.HouseProfitTotal = e.houseProfitTotal
 
 	if totalWinning <= 0 || totalBank <= 0 {
 		return out
 	}
-
-	houseCut := totalBank * e.cfg.HouseEdge
-	distributable := totalBank - houseCut
 
 	for uid, stake := range perWinnerStake {
 		payout := distributable * (stake / totalWinning)

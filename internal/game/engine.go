@@ -25,13 +25,16 @@ type WinnerPayout struct {
 }
 
 type PayoutResult struct {
-	GameID       int                    `json:"game_id"`
-	Hash         string                 `json:"hash"`
-	ResultSide   Side                   `json:"result_side"`
-	TotalBank    float64                `json:"total_bank"`
-	TotalWinning float64                `json:"total_winning"`
-	HasWinners   bool                   `json:"has_winners"`
-	Winners      map[int64]WinnerPayout `json:"winners"`
+	GameID           int                    `json:"game_id"`
+	Hash             string                 `json:"hash"`
+	ResultSide       Side                   `json:"result_side"`
+	TotalBank        float64                `json:"total_bank"`
+	TotalWinning     float64                `json:"total_winning"`
+	HouseCut         float64                `json:"house_cut"`
+	Distributable    float64                `json:"distributable"`
+	HasWinners       bool                   `json:"has_winners"`
+	Winners          map[int64]WinnerPayout `json:"winners"`
+	HouseProfitTotal float64                `json:"house_profit_total"`
 }
 
 type Engine struct {
@@ -49,6 +52,8 @@ type Engine struct {
 
 	payouts map[int]PayoutResult
 	history []PayoutResult
+
+	houseProfitTotal float64
 }
 
 func NewEngine(cfg *config.Config) *Engine {
@@ -150,12 +155,15 @@ func (e *Engine) nextPhaseLocked() {
 		}
 		log.Printf("=== PAYOUT DEBUG ===")
 		log.Printf("GameID: %d", pr.GameID)
-		log.Printf("TotalBank: %.2f", pr.TotalBank)
-		log.Printf("TotalWinning: %.2f", pr.TotalWinning)
+		log.Printf("TotalBank: %.6f", pr.TotalBank)
+		log.Printf("TotalWinning: %.6f", pr.TotalWinning)
+		log.Printf("HouseCut: %.6f", pr.HouseCut)
+		log.Printf("Distributable: %.6f", pr.Distributable)
+		log.Printf("HouseProfitTotal: %.6f", pr.HouseProfitTotal)
 		log.Printf("HasWinners: %v", pr.HasWinners)
 
 		for uid, w := range pr.Winners {
-			log.Printf("Winner %d -> stake: %.2f payout: %.2f multiplier: %.2f",
+			log.Printf("Winner %d -> stake: %.6f payout: %.6f multiplier: %.6f",
 				uid, w.Stake, w.Payout, w.Multiplier)
 		}
 
