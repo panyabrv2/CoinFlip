@@ -6,11 +6,11 @@ import (
 )
 
 func endsAt(now time.Time, seconds int) string {
-	return now.Add(time.Duration(seconds) * time.Second).UTC().Format(time.RFC3339)
+	return now.Add(time.Duration(seconds) * time.Second).UTC().Format("2006-01-02 15:04:05.000000-07")
 }
 
 func EventForPhase(s game.Snapshot, now time.Time) any {
-	serverTime := now.UTC().Format(time.RFC3339)
+	serverTime := now.UTC().Format("2006-01-02 15:04:05.000000-07")
 	switch s.Phase {
 	case game.PhaseBetting:
 		return GameStarted{

@@ -1,13 +1,16 @@
 package ws
 
+import "CoinFlip/internal/game"
+
 type FirstUpdate struct {
-	Event      Event       `json:"event"`
-	GamePhase  string      `json:"game_phase"`
-	Timer      int         `json:"timer"`
-	GameID     int         `json:"game_id"`
-	Hash       string      `json:"hash"`
-	Bets       interface{} `json:"bets"`
-	ServerTime string      `json:"server_time"`
+	Event      Event               `json:"event"`
+	GamePhase  string              `json:"game_phase"`
+	Timer      int                 `json:"timer"`
+	GameID     int                 `json:"game_id"`
+	Hash       string              `json:"hash"`
+	Bets       interface{}         `json:"bets"`
+	ServerTime string              `json:"server_time"`
+	History    []game.PayoutResult `json:"history"`
 }
 
 type LoginMsg struct {
@@ -88,6 +91,26 @@ type NewBets struct {
 	Event      Event       `json:"event"`
 	GameID     int         `json:"game_id"`
 	Hash       string      `json:"hash"`
+	UserID     int64       `json:"user_id"`
+	Side       string      `json:"side"`
 	Bets       interface{} `json:"bets"`
 	ServerTime string      `json:"server_time"`
+}
+
+type GamePayout struct {
+	Event        Event                       `json:"event"`
+	GameID       int                         `json:"game_id"`
+	Hash         string                      `json:"hash"`
+	ResultSide   string                      `json:"result_side"`
+	TotalBank    float64                     `json:"total_bank"`
+	TotalWinning float64                     `json:"total_winning"`
+	HasWinners   bool                        `json:"has_winners"`
+	Winners      map[int64]game.WinnerPayout `json:"winners"`
+	ServerTime   string                      `json:"server_time"`
+}
+
+type ErrorMsg struct {
+	Event      Event  `json:"event"`
+	Message    string `json:"error"`
+	ServerTime string `json:"server_time"`
 }

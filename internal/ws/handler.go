@@ -2,6 +2,7 @@ package ws
 
 import (
 	"CoinFlip/internal/game"
+	"CoinFlip/internal/pricing"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -11,9 +12,10 @@ import (
 )
 
 type Handler struct {
-	Upgrader websocket.Upgrader
-	Engine   *game.Engine
-	Hub      *Hub
+	Upgrader   websocket.Upgrader
+	Engine     *game.Engine
+	Hub        *Hub
+	PriceStore *pricing.Store
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -35,9 +37,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("connected successfully")
 
-	// ---- NEW SNAPSHOT API ----
 	snap := h.Engine.Snapshot()
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format("2006-01-02 15:04:05.000000-07")
 
 	_ = h.Hub.SendJSON(conn, FirstUpdate{
 		Event:      EventFirstUpdate,
@@ -46,10 +47,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		GameID:     snap.GameID,
 		Hash:       snap.Hash,
 		Bets:       h.Engine.BetsSnapshot(),
+		History:    h.Engine.History(),
 		ServerTime: now,
 	})
 
-	// --- LOGIN ---
 	var login LoginMsg
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 	if err := conn.ReadJSON(&login); err != nil {
@@ -75,7 +76,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		GameID:     snap.GameID,
 		Hash:       snap.Hash,
 		Online:     h.Hub.Online(),
-		ServerTime: time.Now().UTC().Format(time.RFC3339),
+		ServerTime: time.Now().UTC().Format("2006-01-02 15:04:05.000000-07"),
 	})
 
 	for {
@@ -99,16 +100,35 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if bet.UserID == 0 || len(bet.BetItems) == 0 {
+			if bet.UserID == 0 ||
+				(bet.Side != "heads" && bet.Side != "tails") ||
+				len(bet.BetItems) == 0 {
 				continue
 			}
 
 			items := make([]game.ItemRef, 0, len(bet.BetItems))
+
 			for _, it := range bet.BetItems {
+				price, ok := h.PriceStore.Price(it.Type, it.ItemID)
+				if !ok {
+					_ = h.Hub.SendJSON(conn, ErrorMsg{
+						Event:      EventError,
+						Message:    "unknown item price: " + pricing.Key(it.Type, it.ItemID),
+						ServerTime: time.Now().UTC().Format("2006-01-02 15:04:05.000000-07"),
+					})
+					items = nil
+					break
+				}
+
 				items = append(items, game.ItemRef{
-					Type:   it.Type,
-					ItemID: it.ItemID,
+					Type:    it.Type,
+					ItemID:  it.ItemID,
+					CostTon: price,
 				})
+			}
+
+			if len(items) == 0 {
+				continue
 			}
 
 			accepted, ok := h.Engine.AddBet(bet.UserID, bet.Side, items)
@@ -119,21 +139,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = h.Engine.TryStartFromWaiting()
 
 			snap = h.Engine.Snapshot()
+			serverTime := time.Now().UTC().Format("2006-01-02 15:04:05.000000-07")
 
 			_ = h.Hub.SendJSON(conn, BetsAccepted{
 				Event:      EventBetsAccepted,
 				GameID:     snap.GameID,
 				Hash:       snap.Hash,
 				Accepted:   accepted,
-				ServerTime: time.Now().UTC().Format(time.RFC3339),
+				ServerTime: serverTime,
 			})
 
 			h.Hub.BroadcastJSON(NewBets{
 				Event:      EventNewBets,
 				GameID:     snap.GameID,
 				Hash:       snap.Hash,
+				UserID:     bet.UserID,
+				Side:       bet.Side,
 				Bets:       h.Engine.BetsSnapshot(),
-				ServerTime: time.Now().UTC().Format(time.RFC3339),
+				ServerTime: serverTime,
 			})
 		}
 	}

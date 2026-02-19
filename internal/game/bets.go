@@ -1,26 +1,51 @@
 package game
 
-import "sync"
+import (
+	"strconv"
+	"sync"
+	"time"
+)
 
 type ItemRef struct {
-	Type   string `json:"type"`
-	ItemID string `json:"item_id"`
+	Type    string  `json:"type"`
+	ItemID  string  `json:"item_id"`
+	CostTon float64 `json:"cost_ton"`
 }
 
-type UserBet struct {
-	UserID int64     `json:"user_id"`
-	Side   string    `json:"side"`
-	Items  []ItemRef `json:"items"`
+type BetItemSnapshot struct {
+	Type     string  `json:"type"`
+	ItemID   string  `json:"item_id"`
+	Name     string  `json:"name"`
+	PhotoURL *string `json:"photo_url"`
+	CostTon  float64 `json:"cost_ton"`
+}
+
+type BetSnapshot struct {
+	BetID     int             `json:"bet_id"`
+	BetType   string          `json:"bet_type"`
+	CreatedAt string          `json:"created_at"`
+	UserID    int64           `json:"user_id"`
+	Side      string          `json:"side"`
+	BetItem   BetItemSnapshot `json:"bet_item"`
+}
+
+type UserBetsSnapshot struct {
+	PhotoURL string        `json:"photo_url"`
+	Bets     []BetSnapshot `json:"bets"`
 }
 
 type BetStore struct {
-	mu   sync.RWMutex
-	bets map[int]map[int64]UserBet
+	mu sync.RWMutex
+
+	bets map[int]map[int64]*UserBetsSnapshot
+
+	nextBetID map[int]int
 }
 
 func NewBetStore() *BetStore {
 	return &BetStore{
-		bets: make(map[int]map[int64]UserBet),
+		bets:      make(map[int]map[int64]*UserBetsSnapshot),
+		nextBetID: make(map[int]int),
 	}
 }
 
@@ -29,74 +54,74 @@ func (s *BetStore) Add(gameID int, userID int64, side string, items []ItemRef) i
 	defer s.mu.Unlock()
 
 	if _, ok := s.bets[gameID]; !ok {
-		s.bets[gameID] = make(map[int64]UserBet)
+		s.bets[gameID] = make(map[int64]*UserBetsSnapshot)
 	}
-	s.bets[gameID][userID] = UserBet{
-		UserID: userID,
-		Side:   side,
-		Items:  items,
+	if _, ok := s.bets[gameID][userID]; !ok {
+		s.bets[gameID][userID] = &UserBetsSnapshot{
+			PhotoURL: "",
+			Bets:     []BetSnapshot{},
+		}
 	}
-	return len(items)
+
+	accepted := 0
+
+	createdAt := time.Now().UTC().Format("2006-01-02 15:04:05.000000-07")
+
+	for _, it := range items {
+		s.nextBetID[gameID]++
+		betID := s.nextBetID[gameID]
+
+		b := BetSnapshot{
+			BetID:     betID,
+			BetType:   it.Type,
+			CreatedAt: createdAt,
+			UserID:    userID,
+			Side:      side,
+			BetItem: BetItemSnapshot{
+				Type:     it.Type,
+				ItemID:   it.ItemID,
+				Name:     it.ItemID,
+				PhotoURL: nil,
+				CostTon:  it.CostTon,
+			},
+		}
+
+		s.bets[gameID][userID].Bets = append(s.bets[gameID][userID].Bets, b)
+		accepted++
+	}
+
+	return accepted
 }
 
 func (s *BetStore) UniqueUsers(gameID int) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	if s.bets[gameID] == nil {
+		return 0
+	}
 	return len(s.bets[gameID])
 }
 
-type betsSnapshot struct {
-	TotalBets  int        `json:"total_bets"`
-	TotalValue int        `json:"total_value"`
-	Heads      sideBucket `json:"heads"`
-	Tails      sideBucket `json:"tails"`
-}
-
-type sideBucket struct {
-	TotalBets  int        `json:"total_bets"`
-	TotalValue int        `json:"total_value"`
-	Users      []userSlot `json:"users"`
-}
-
-type userSlot struct {
-	UserID     int64     `json:"user_id"`
-	TotalValue int       `json:"total_value"`
-	Items      []ItemRef `json:"items"`
-}
-
-func (s *BetStore) Snapshot(gameID int) any {
+func (s *BetStore) Snapshot(gameID int) map[string]UserBetsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var out betsSnapshot
+	out := make(map[string]UserBetsSnapshot)
 
-	for _, b := range s.bets[gameID] {
-		slot := userSlot{
-			UserID:     b.UserID,
-			TotalValue: 0,
-			Items:      b.Items,
-		}
-
-		out.TotalBets++
-
-		if b.Side == "heads" {
-			out.Heads.TotalBets++
-			out.Heads.Users = append(out.Heads.Users, slot)
-		} else if b.Side == "tails" {
-			out.Tails.TotalBets++
-			out.Tails.Users = append(out.Tails.Users, slot)
-		}
+	m := s.bets[gameID]
+	if m == nil {
+		return out
 	}
 
-	out.TotalValue = 0
-	out.Heads.TotalValue = 0
-	out.Tails.TotalValue = 0
-
-	if out.Heads.Users == nil {
-		out.Heads.Users = []userSlot{}
-	}
-	if out.Tails.Users == nil {
-		out.Tails.Users = []userSlot{}
+	for uid, ub := range m {
+		if ub == nil {
+			continue
+		}
+		out[strconv.FormatInt(uid, 10)] = UserBetsSnapshot{
+			PhotoURL: ub.PhotoURL,
+			Bets:     append([]BetSnapshot(nil), ub.Bets...),
+		}
 	}
 
 	return out
@@ -105,5 +130,6 @@ func (s *BetStore) Snapshot(gameID int) any {
 func (s *BetStore) Reset(gameID int) {
 	s.mu.Lock()
 	delete(s.bets, gameID)
+	delete(s.nextBetID, gameID)
 	s.mu.Unlock()
 }
