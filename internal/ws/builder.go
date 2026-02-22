@@ -1,16 +1,8 @@
 package ws
 
-import (
-	"CoinFlip/internal/game"
-	"time"
-)
+import "CoinFlip/internal/game"
 
-func endsAt(now time.Time, seconds int) string {
-	return now.Add(time.Duration(seconds) * time.Second).UTC().Format("2006-01-02 15:04:05.000000-07")
-}
-
-func EventForPhase(s game.Snapshot, now time.Time) any {
-	serverTime := now.UTC().Format("2006-01-02 15:04:05.000000-07")
+func EventForPhase(s game.Snapshot) any {
 	switch s.Phase {
 	case game.PhaseBetting:
 		return GameStarted{
@@ -18,8 +10,6 @@ func EventForPhase(s game.Snapshot, now time.Time) any {
 			GameID:      s.GameID,
 			Hash:        s.Hash,
 			BettingTime: s.Timer,
-			EndsAt:      endsAt(now, s.Timer),
-			ServerTime:  serverTime,
 		}
 
 	case game.PhaseGettingResult:
@@ -29,8 +19,6 @@ func EventForPhase(s game.Snapshot, now time.Time) any {
 			Hash:           s.Hash,
 			TimeTillResult: s.Timer,
 			ResultSide:     string(s.ResultSide),
-			EndsAt:         endsAt(now, s.Timer),
-			ServerTime:     serverTime,
 		}
 
 	case game.PhaseFinished:
@@ -39,17 +27,15 @@ func EventForPhase(s game.Snapshot, now time.Time) any {
 			GameID:     s.GameID,
 			Hash:       s.Hash,
 			ResultSide: string(s.ResultSide),
-			Seed:       s.Seed,
-			ServerTime: serverTime,
 		}
 
 	case game.PhaseWaiting:
 		return NewGame{
-			Event:      EventNewGame,
-			GameID:     s.GameID,
-			Hash:       s.Hash,
-			ServerTime: serverTime,
+			Event:  EventNewGame,
+			GameID: s.GameID,
+			Hash:   s.Hash,
 		}
+
 	default:
 		return nil
 	}

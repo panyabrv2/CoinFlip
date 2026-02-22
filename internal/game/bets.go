@@ -64,7 +64,6 @@ func (s *BetStore) Add(gameID int, userID int64, side string, items []ItemRef) i
 	}
 
 	accepted := 0
-
 	createdAt := time.Now().UTC().Format("2006-01-02 15:04:05.000000-07")
 
 	for _, it := range items {

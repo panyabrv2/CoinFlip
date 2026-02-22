@@ -25,16 +25,13 @@ type WinnerPayout struct {
 }
 
 type PayoutResult struct {
-	GameID           int                    `json:"game_id"`
-	Hash             string                 `json:"hash"`
-	ResultSide       Side                   `json:"result_side"`
-	TotalBank        float64                `json:"total_bank"`
-	TotalWinning     float64                `json:"total_winning"`
-	HouseCut         float64                `json:"house_cut"`
-	Distributable    float64                `json:"distributable"`
-	HasWinners       bool                   `json:"has_winners"`
-	Winners          map[int64]WinnerPayout `json:"winners"`
-	HouseProfitTotal float64                `json:"house_profit_total"`
+	GameID       int                    `json:"game_id"`
+	Hash         string                 `json:"hash"`
+	ResultSide   Side                   `json:"result_side"`
+	TotalBank    float64                `json:"total_bank"`
+	TotalWinning float64                `json:"total_winning"`
+	HasWinners   bool                   `json:"has_winners"`
+	Winners      map[int64]WinnerPayout `json:"winners"`
 }
 
 type Engine struct {
@@ -52,14 +49,11 @@ type Engine struct {
 
 	payouts map[int]PayoutResult
 	history []PayoutResult
-
-	houseProfitTotal float64
 }
 
 func NewEngine(cfg *config.Config) *Engine {
 	seedBytes, err := rng.NewSeed()
 	if err != nil {
-		log.Printf("rng.NewSeed error: %v", err)
 		seedBytes = []byte("fallback-seed-fallback-seed-123456")
 	}
 
@@ -129,9 +123,10 @@ func (e *Engine) nextPhaseLocked() {
 			e.timer = -1
 			return
 		}
+
 		e.phase = PhaseBetting
 		e.timer = e.cfg.BettingTime
-		log.Println("gameStarted")
+		log.Printf("game: phase from=waiting to=betting game_id=%d timer=%d", e.gameID, e.timer)
 
 	case PhaseBetting:
 		e.phase = PhaseGettingResult
@@ -144,32 +139,20 @@ func (e *Engine) nextPhaseLocked() {
 			e.resultSide = Side(rng.SideFromSeed(seedBytes))
 		}
 
-		log.Println("gettingResult")
+		log.Printf("game: phase from=betting to=gettingResult game_id=%d timer=%d", e.gameID, e.timer)
 
 	case PhaseGettingResult:
 		pr := e.calculatePayoutsLocked()
 		e.payouts[e.gameID] = pr
+
 		e.history = append(e.history, pr)
 		if len(e.history) > 10 {
 			e.history = e.history[1:]
 		}
-		log.Printf("=== PAYOUT DEBUG ===")
-		log.Printf("GameID: %d", pr.GameID)
-		log.Printf("TotalBank: %.6f", pr.TotalBank)
-		log.Printf("TotalWinning: %.6f", pr.TotalWinning)
-		log.Printf("HouseCut: %.6f", pr.HouseCut)
-		log.Printf("Distributable: %.6f", pr.Distributable)
-		log.Printf("HouseProfitTotal: %.6f", pr.HouseProfitTotal)
-		log.Printf("HasWinners: %v", pr.HasWinners)
-
-		for uid, w := range pr.Winners {
-			log.Printf("Winner %d -> stake: %.6f payout: %.6f multiplier: %.6f",
-				uid, w.Stake, w.Payout, w.Multiplier)
-		}
 
 		e.phase = PhaseFinished
 		e.timer = e.cfg.NextGameDelay
-		log.Println("gameFinished")
+		log.Printf("game: phase from=gettingResult to=finished game_id=%d timer=%d result=%s", e.gameID, e.timer, e.resultSide)
 
 	case PhaseFinished:
 		e.bets.Reset(e.gameID)
@@ -181,14 +164,13 @@ func (e *Engine) nextPhaseLocked() {
 
 		seedBytes, err := rng.NewSeed()
 		if err != nil {
-			log.Printf("rng.NewSeed error: %v", err)
 			seedBytes = []byte("fallback-seed-fallback-seed-123456")
 		}
 
 		e.seedHex = hex.EncodeToString(seedBytes)
 		e.hash = rng.SHA1Hex(seedBytes)
 
-		log.Println("newGame")
+		log.Printf("game: phase from=finished to=waiting game_id=%d", e.gameID)
 	}
 }
 
@@ -252,9 +234,10 @@ func (e *Engine) TryStartFromWaiting() bool {
 	if e.uniqueBetUsersLocked() < 2 {
 		return false
 	}
+
 	e.phase = PhaseBetting
 	e.timer = e.cfg.BettingTime
-	log.Println("gameStarted")
+	log.Printf("game: phase from=waiting to=betting game_id=%d timer=%d", e.gameID, e.timer)
 	return true
 }
 

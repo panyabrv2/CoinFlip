@@ -12,6 +12,5 @@ const (
 	EventNewGame       Event = "newGame"
 	EventBetsAccepted  Event = "bets_accepted"
 	EventNewBets       Event = "new_bets"
-	EventGamePayout    Event = "game_payout"
 	EventError         Event = "error"
 )

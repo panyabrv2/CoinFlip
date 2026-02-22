@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -10,15 +11,17 @@ import (
 type Hub struct {
 	mu sync.RWMutex
 
-	conns map[*websocket.Conn]struct{}
-
+	conns  map[*websocket.Conn]struct{}
 	authed map[*websocket.Conn]struct{}
+
+	userID map[*websocket.Conn]int64
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		conns:  make(map[*websocket.Conn]struct{}),
 		authed: make(map[*websocket.Conn]struct{}),
+		userID: make(map[*websocket.Conn]int64),
 	}
 }
 
@@ -32,15 +35,24 @@ func (h *Hub) Unregister(c *websocket.Conn) {
 	h.mu.Lock()
 	delete(h.conns, c)
 	delete(h.authed, c)
+	delete(h.userID, c)
 	h.mu.Unlock()
 }
 
-func (h *Hub) MarkAuthed(c *websocket.Conn) {
+func (h *Hub) MarkAuthed(c *websocket.Conn, uid int64) {
 	h.mu.Lock()
 	if _, ok := h.conns[c]; ok {
 		h.authed[c] = struct{}{}
+		h.userID[c] = uid
 	}
 	h.mu.Unlock()
+}
+
+func (h *Hub) UserID(c *websocket.Conn) int64 {
+	h.mu.RLock()
+	uid := h.userID[c]
+	h.mu.RUnlock()
+	return uid
 }
 
 func (h *Hub) Online() int {
@@ -51,7 +63,11 @@ func (h *Hub) Online() int {
 }
 
 func (h *Hub) SendJSON(c *websocket.Conn, v any) error {
-	return c.WriteJSON(v)
+	if err := c.WriteJSON(v); err != nil {
+		log.Printf("hub: send fail ip=%s err=%v", c.RemoteAddr(), err)
+		return err
+	}
+	return nil
 }
 
 func (h *Hub) BroadcastJSON(v any) {

@@ -1,16 +1,12 @@
 package ws
 
-import "CoinFlip/internal/game"
-
 type FirstUpdate struct {
-	Event      Event               `json:"event"`
-	GamePhase  string              `json:"game_phase"`
-	Timer      int                 `json:"timer"`
-	GameID     int                 `json:"game_id"`
-	Hash       string              `json:"hash"`
-	Bets       interface{}         `json:"bets"`
-	ServerTime string              `json:"server_time"`
-	History    []game.PayoutResult `json:"history"`
+	Event     Event       `json:"event"`
+	GamePhase string      `json:"game_phase"`
+	Timer     int         `json:"timer"`
+	GameID    int         `json:"game_id"`
+	Hash      string      `json:"hash"`
+	Bets      interface{} `json:"bets"`
 }
 
 type LoginMsg struct {
@@ -19,17 +15,15 @@ type LoginMsg struct {
 }
 
 type Authorized struct {
-	Event      Event  `json:"event"`
-	GameID     int    `json:"game_id"`
-	Hash       string `json:"hash"`
-	Online     int    `json:"online"`
-	ServerTime string `json:"server_time"`
+	Event  Event  `json:"event"`
+	GameID int    `json:"game_id"`
+	Hash   string `json:"hash"`
+	Online int    `json:"online"`
 }
 
 type OnlineMsg struct {
-	Event      Event  `json:"event"`
-	Online     int    `json:"online"`
-	ServerTime string `json:"server_time"`
+	Event  Event `json:"event"`
+	Online int   `json:"online"`
 }
 
 type GameStarted struct {
@@ -37,8 +31,6 @@ type GameStarted struct {
 	GameID      int    `json:"game_id"`
 	Hash        string `json:"hash"`
 	BettingTime int    `json:"betting_time"`
-	EndsAt      string `json:"ends_at"`
-	ServerTime  string `json:"server_time"`
 }
 
 type GettingResult struct {
@@ -47,8 +39,6 @@ type GettingResult struct {
 	Hash           string `json:"hash"`
 	TimeTillResult int    `json:"time_till_result"`
 	ResultSide     string `json:"result_side"`
-	EndsAt         string `json:"ends_at"`
-	ServerTime     string `json:"server_time"`
 }
 
 type GameFinished struct {
@@ -56,15 +46,12 @@ type GameFinished struct {
 	GameID     int    `json:"game_id"`
 	Hash       string `json:"hash"`
 	ResultSide string `json:"result_side"`
-	Seed       string `json:"seed"`
-	ServerTime string `json:"server_time"`
 }
 
 type NewGame struct {
-	Event      Event  `json:"event"`
-	GameID     int    `json:"game_id"`
-	Hash       string `json:"hash"`
-	ServerTime string `json:"server_time"`
+	Event  Event  `json:"event"`
+	GameID int    `json:"game_id"`
+	Hash   string `json:"hash"`
 }
 
 type BetMsg struct {
@@ -80,40 +67,22 @@ type BetItem struct {
 }
 
 type BetsAccepted struct {
-	Event      Event  `json:"event"`
-	GameID     int    `json:"game_id"`
-	Hash       string `json:"hash"`
-	Accepted   int    `json:"accepted"`
-	ServerTime string `json:"server_time"`
+	Event    Event  `json:"event"`
+	GameID   int    `json:"game_id"`
+	Hash     string `json:"hash"`
+	Accepted int    `json:"accepted"`
 }
 
 type NewBets struct {
-	Event      Event       `json:"event"`
-	GameID     int         `json:"game_id"`
-	Hash       string      `json:"hash"`
-	UserID     int64       `json:"user_id"`
-	Side       string      `json:"side"`
-	Bets       interface{} `json:"bets"`
-	ServerTime string      `json:"server_time"`
-}
-
-type GamePayout struct {
-	Event            Event                       `json:"event"`
-	GameID           int                         `json:"game_id"`
-	Hash             string                      `json:"hash"`
-	ResultSide       string                      `json:"result_side"`
-	TotalBank        float64                     `json:"total_bank"`
-	TotalWinning     float64                     `json:"total_winning"`
-	Distributate     float64                     `json:"distributate"`
-	HouseCut         float64                     `json:"house_cut"`
-	HasWinners       bool                        `json:"has_winners"`
-	Winners          map[int64]game.WinnerPayout `json:"winners"`
-	HouseProfitTotal float64                     `json:"house_profit_total"`
-	ServerTime       string                      `json:"server_time"`
+	Event  Event       `json:"event"`
+	GameID int         `json:"game_id"`
+	Hash   string      `json:"hash"`
+	UserID int64       `json:"user_id"`
+	Side   string      `json:"side"`
+	Bets   interface{} `json:"bets"`
 }
 
 type ErrorMsg struct {
-	Event      Event  `json:"event"`
-	Message    string `json:"error"`
-	ServerTime string `json:"server_time"`
+	Event   Event  `json:"event"`
+	Message string `json:"error"`
 }

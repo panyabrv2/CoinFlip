@@ -19,7 +19,6 @@ func (e *Engine) calculatePayoutsLocked() PayoutResult {
 	for _, ub := range snap {
 		for _, b := range ub.Bets {
 			v := betStakeValue(b)
-
 			totalBank += v
 
 			if Side(b.Side) == result {
@@ -29,31 +28,26 @@ func (e *Engine) calculatePayoutsLocked() PayoutResult {
 		}
 	}
 
-	houseCut := totalBank * e.cfg.HouseEdge
-	distributable := totalBank - houseCut
-
 	out := PayoutResult{
-		GameID:           gid,
-		Hash:             e.hash,
-		ResultSide:       result,
-		TotalBank:        totalBank,
-		TotalWinning:     totalWinning,
-		Distributable:    distributable,
-		HouseCut:         houseCut,
-		HasWinners:       totalWinning > 0,
-		Winners:          make(map[int64]WinnerPayout),
-		HouseProfitTotal: 0,
+		GameID:       gid,
+		Hash:         e.hash,
+		ResultSide:   result,
+		TotalBank:    totalBank,
+		TotalWinning: totalWinning,
+		HasWinners:   totalWinning > 0,
+		Winners:      make(map[int64]WinnerPayout),
 	}
-
-	e.houseProfitTotal += houseCut
-	out.HouseProfitTotal = e.houseProfitTotal
 
 	if totalWinning <= 0 || totalBank <= 0 {
 		return out
 	}
 
 	for uid, stake := range perWinnerStake {
-		payout := distributable * (stake / totalWinning)
+		share := 0.0
+		if totalWinning > 0 {
+			share = stake / totalWinning
+		}
+		payout := totalBank * share
 
 		mult := 0.0
 		if stake > 0 {
