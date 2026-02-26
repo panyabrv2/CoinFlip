@@ -120,7 +120,6 @@ func (s *Store) Unreserve(gameID int, userID int64, amount float64) {
 	m[userID] = cur - amount
 	s.available[userID] += amount
 
-	// cleanup
 	if m[userID] <= 0 {
 		delete(m, userID)
 	}
