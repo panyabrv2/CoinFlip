@@ -1,0 +1,39 @@
+services:
+  coinflip:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: coinflip
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_DSN: "postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      BETTING_TIME: "10"
+      TIME_TILL_RESULT: "7"
+      NEXT_GAME_DELAY: "3"
+      ONLINE_INTERVAL: "15"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: coinflip-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: coinflip-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
